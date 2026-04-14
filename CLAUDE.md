@@ -1,3 +1,64 @@
+# TradingView MCP — NanoClaw Integration
+
+## Kontekst NanoClaw
+
+Ten katalog to git submodule repo `nanoclaw` (`projects/tradingview-mcp/`).
+Używany wyłącznie przez instancję **mac-trading** (`~/nanoclaw-trading/`).
+
+### Architektura połączenia
+
+```
+Telegram → mac-trading (Node.js) → Docker container (agent) → host.docker.internal:3010
+                                                                        ↓
+                                                              supergateway (SSE)
+                                                                        ↓
+                                                              tradingview-mcp (stdio)
+                                                                        ↓
+                                                              TradingView Desktop (CDP :9229)
+```
+
+### Uruchamianie
+
+**TradingView Desktop** (wymagane przed użyciem narzędzi):
+```bash
+open -a "TradingView" --args --remote-debugging-port=9229
+```
+
+**supergateway service** (launchd, autostart):
+```bash
+launchctl kickstart -k gui/$(id -u)/com.tradingview-mcp   # restart
+launchctl unload ~/Library/LaunchAgents/com.tradingview-mcp.plist  # stop
+launchctl load   ~/Library/LaunchAgents/com.tradingview-mcp.plist  # start
+tail -f ~/nanoclaw-trading/logs/tradingview-mcp.log        # logi
+```
+
+Port: **3010** (agent container widzi go jako `http://host.docker.internal:3010`)
+
+### Konfiguracja
+
+| Plik | Rola |
+|------|------|
+| `rules.json` | Twoje reguły tradingowe (nie syncowane z upstream) |
+| `~/Library/LaunchAgents/com.tradingview-mcp.plist` | launchd service definition |
+| `~/nanoclaw-trading/.env` → `TRADINGVIEW_MCP_URL` | URL do supergateway dla agenta |
+
+### Aktualizacja submodułu (upstream)
+
+```bash
+cd ~/Projects/nanoclaw/projects/tradingview-mcp
+git pull origin main
+cd ~/Projects/nanoclaw
+git add projects/tradingview-mcp
+git commit -m "chore: update tradingview-mcp submodule"
+```
+
+### Rozwój i customizacja
+
+Zmiany w `src/` trafiają do repo submodułu (osobny git, upstream = tradesdontlie/tradingview-mcp).
+Zmiany w integracji NanoClaw (port, launchd, konfiguracja agenta) → repo nanoclaw (`src/config.ts`, `src/container-runner.ts`).
+
+---
+
 # TradingView MCP — Claude Instructions
 
 68 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
