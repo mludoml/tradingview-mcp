@@ -8,39 +8,28 @@ Używany wyłącznie przez instancję **mac-trading** (`~/nanoclaw-trading/`).
 ### Architektura połączenia
 
 ```
-Telegram → mac-trading (Node.js) → Docker container (agent) → host.docker.internal:3010
-                                                                        ↓
-                                                              supergateway (SSE)
-                                                                        ↓
-                                                              tradingview-mcp (stdio)
-                                                                        ↓
-                                                              TradingView Desktop (CDP :9229)
+Telegram → mac-trading (Node.js) → Docker container (agent)
+                                           ↓ stdio (bezpośrednio, bez supergateway)
+                                   /workspace/tradingview-mcp/src/server.js
+                                           ↓ CDP_HOST=host.docker.internal:9222
+                                   TradingView Desktop (CDP)
 ```
 
 ### Uruchamianie
 
-**TradingView Desktop** (wymagane przed użyciem narzędzi):
+**TradingView Desktop** (wymagane przed użyciem narzędzi, domyślny port 9222):
 ```bash
-open -a "TradingView" --args --remote-debugging-port=9229
+open -a "TradingView" --args --remote-debugging-port=9222
 ```
-
-**supergateway service** (launchd, autostart):
-```bash
-launchctl kickstart -k gui/$(id -u)/com.tradingview-mcp   # restart
-launchctl unload ~/Library/LaunchAgents/com.tradingview-mcp.plist  # stop
-launchctl load   ~/Library/LaunchAgents/com.tradingview-mcp.plist  # start
-tail -f ~/nanoclaw-trading/logs/tradingview-mcp.log        # logi
-```
-
-Port: **3010** (agent container widzi go jako `http://host.docker.internal:3010`)
 
 ### Konfiguracja
 
 | Plik | Rola |
 |------|------|
 | `rules.json` | Twoje reguły tradingowe (nie syncowane z upstream) |
-| `~/Library/LaunchAgents/com.tradingview-mcp.plist` | launchd service definition |
-| `~/nanoclaw-trading/.env` → `TRADINGVIEW_MCP_URL` | URL do supergateway dla agenta |
+| `~/nanoclaw-trading/.env` → `TRADINGVIEW_MCP_PATH` | Ścieżka do katalogu submodułu |
+| `src/connection.js` | `CDP_HOST`/`CDP_PORT` env vars (dodane przez nas) |
+
 
 ### Aktualizacja submodułu (upstream)
 
@@ -66,11 +55,13 @@ Zmiany w integracji NanoClaw (port, launchd, konfiguracja agenta) → repo nanoc
 ## Decision Tree — Which Tool When
 
 ### "What's on my chart right now?"
+
 1. `chart_get_state` → symbol, timeframe, chart type, list of all indicators with entity IDs
 2. `data_get_study_values` → current numeric values from all visible indicators (RSI, MACD, BBands, EMAs, etc.)
 3. `quote_get` → real-time price, OHLC, volume for current symbol
 
 ### "What levels/lines/labels are showing?"
+
 Custom Pine indicators draw with `line.new()`, `label.new()`, `table.new()`, `box.new()`. These are invisible to normal data tools. Use:
 
 1. `data_get_pine_lines` → horizontal price levels drawn by indicators (deduplicated, sorted high→low)
@@ -81,11 +72,13 @@ Custom Pine indicators draw with `line.new()`, `label.new()`, `table.new()`, `bo
 Use `study_filter` parameter to target a specific indicator by name substring (e.g., `study_filter: "Profiler"`).
 
 ### "Give me price data"
+
 - `data_get_ohlcv` with `summary: true` → compact stats (high, low, range, change%, avg volume, last 5 bars)
 - `data_get_ohlcv` without summary → all bars (use `count` to limit, default 100)
 - `quote_get` → single latest price snapshot
 
 ### "Analyze my chart" (full report workflow)
+
 1. `quote_get` → current price
 2. `data_get_study_values` → all indicator readings
 3. `data_get_pine_lines` → key price levels from custom indicators
@@ -95,6 +88,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 7. `capture_screenshot` → visual confirmation
 
 ### "Change the chart"
+
 - `chart_set_symbol` → switch ticker (e.g., "AAPL", "ES1!", "NYMEX:CL1!")
 - `chart_set_timeframe` → switch resolution (e.g., "1", "5", "15", "60", "D", "W")
 - `chart_set_type` → switch chart style (Candles, HeikinAshi, Line, Area, Renko, etc.)
@@ -103,6 +97,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 - `chart_set_visible_range` → zoom to exact date range (unix timestamps)
 
 ### "Work on Pine Script"
+
 1. `pine_set_source` → inject code into editor
 2. `pine_smart_compile` → compile with auto-detection + error check
 3. `pine_get_errors` → read compilation errors
@@ -113,6 +108,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 8. `pine_open` → load a saved script by name
 
 ### "Practice trading with replay"
+
 1. `replay_start` with `date: "2025-03-01"` → enter replay mode
 2. `replay_step` → advance one bar
 3. `replay_autoplay` → auto-advance (set speed with `speed` param in ms)
@@ -121,20 +117,24 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 6. `replay_stop` → return to realtime
 
 ### "Screen multiple symbols"
+
 - `batch_run` with `symbols: ["ES1!", "NQ1!", "YM1!"]` and `action: "screenshot"` or `"get_ohlcv"`
 
 ### "Draw on the chart"
+
 - `draw_shape` → horizontal_line, trend_line, rectangle, text (pass point + optional point2)
 - `draw_list` → see what's drawn
 - `draw_remove_one` → remove by ID
 - `draw_clear` → remove all
 
 ### "Manage alerts"
+
 - `alert_create` → set price alert (condition: "crossing", "greater_than", "less_than")
 - `alert_list` → view active alerts
 - `alert_delete` → remove alerts
 
 ### "Navigate the UI"
+
 - `ui_open_panel` → open/close pine-editor, strategy-tester, watchlist, alerts, trading
 - `ui_click` → click buttons by aria-label, text, or data-name
 - `layout_switch` → load a saved layout by name
@@ -142,6 +142,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 - `capture_screenshot` → take a screenshot (regions: "full", "chart", "strategy_tester")
 
 ### "TradingView isn't running"
+
 - `tv_launch` → auto-detect and launch TradingView with CDP on Mac/Win/Linux
 - `tv_health_check` → verify connection is working
 
@@ -159,17 +160,20 @@ These tools can return large payloads. Follow these rules to avoid context bloat
 8. **Cap your OHLCV requests** — `count: 20` for quick analysis, `count: 100` for deeper work, `count: 500` only when specifically needed
 
 ### Output Size Estimates (compact mode)
-| Tool | Typical Output |
-|------|---------------|
-| `quote_get` | ~200 bytes |
-| `data_get_study_values` | ~500 bytes (all indicators) |
-| `data_get_pine_lines` | ~1-3 KB per study (deduplicated levels) |
-| `data_get_pine_labels` | ~2-5 KB per study (capped at 50) |
-| `data_get_pine_tables` | ~1-4 KB per study (formatted rows) |
-| `data_get_pine_boxes` | ~1-2 KB per study (deduplicated zones) |
-| `data_get_ohlcv` (summary) | ~500 bytes |
-| `data_get_ohlcv` (100 bars) | ~8 KB |
-| `capture_screenshot` | ~300 bytes (returns file path, not image data) |
+
+
+| Tool                        | Typical Output                                 |
+| --------------------------- | ---------------------------------------------- |
+| `quote_get`                 | ~200 bytes                                     |
+| `data_get_study_values`     | ~500 bytes (all indicators)                    |
+| `data_get_pine_lines`       | ~1-3 KB per study (deduplicated levels)        |
+| `data_get_pine_labels`      | ~2-5 KB per study (capped at 50)               |
+| `data_get_pine_tables`      | ~1-4 KB per study (formatted rows)             |
+| `data_get_pine_boxes`       | ~1-2 KB per study (deduplicated zones)         |
+| `data_get_ohlcv` (summary)  | ~500 bytes                                     |
+| `data_get_ohlcv` (100 bars) | ~8 KB                                          |
+| `capture_screenshot`        | ~300 bytes (returns file path, not image data) |
+
 
 ## Tool Conventions
 
