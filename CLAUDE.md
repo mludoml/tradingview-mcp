@@ -122,10 +122,30 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 
 ### "Draw on the chart"
 
-- `draw_shape` → horizontal_line, trend_line, rectangle, text (pass point + optional point2)
+- `draw_shape` → horizontal_line, trend_line, text (pass point + optional point2)
+  - ⚠️ `rectangle` shape returns `entity_id: null` — use `ui_evaluate` with `_createMultipointShape` + `setPoints` pattern instead (see CLAUDE_NOTES.md)
 - `draw_list` → see what's drawn
 - `draw_remove_one` → remove by ID
-- `draw_clear` → remove all
+- `draw_clear` → remove all drawings
+  - ⚠️ Uses `removeAllShapes()` internally — after calling this, `draw_shape` with rectangles stops working in the same session. Use `draw_remove_one` per shape instead, or `ui_evaluate` with `removeAllDrawingTools()`.
+
+**Drawing rectangles/zones — working pattern (via `ui_evaluate`):**
+```js
+(function() {
+  const api = window.TradingViewApi._activeChartWidgetWV.value();
+  api._createMultipointShape(
+    [{ time: T1, price: HIGH }, { time: T2, price: LOW }],
+    { shape: 'rectangle', overrides: { fillBackground: true, backgroundColor: 'rgba(255,152,0,0.33)', color: 'rgba(255,152,0,1)', linewidth: 2 }}
+  ).then(function(id) {
+    var s = api.getShapeById(id);
+    if (s) s.setPoints([{ time: T1, price: HIGH }, { time: T2, price: LOW }]);
+    window._done = true;
+  });
+  return 'drawing...';
+})()
+// Check window._done after ~5s
+```
+Always use `rgba()` format for colors — hex with alpha (`#ff980055`) may fail.
 
 ### "Manage alerts"
 
