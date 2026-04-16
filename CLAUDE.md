@@ -50,7 +50,7 @@ Zmiany w integracji NanoClaw (port, launchd, konfiguracja agenta) → repo nanoc
 
 # TradingView MCP — Claude Instructions
 
-68 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
+78 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
 
 ## Decision Tree — Which Tool When
 
@@ -76,6 +76,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 - `data_get_ohlcv` with `summary: true` → compact stats (high, low, range, change%, avg volume, last 5 bars)
 - `data_get_ohlcv` without summary → all bars (use `count` to limit, default 100)
 - `quote_get` → single latest price snapshot
+- `depth_get` → order book / DOM (Depth of Market) — requires DOM panel open in TradingView
 
 ### "Analyze my chart" (full report workflow)
 
@@ -107,6 +108,12 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 7. `pine_new` → create blank indicator/strategy/library
 8. `pine_open` → load a saved script by name
 
+### "Analyze a strategy backtest"
+
+- `data_get_strategy_results` → performance metrics (profit factor, win rate, max drawdown, etc.) — requires strategy on chart
+- `data_get_trades` → trade list from Strategy Tester (pass `max_trades` to limit)
+- `data_get_equity` → equity curve data from Strategy Tester
+
 ### "Practice trading with replay"
 
 1. `replay_start` with `date: "2025-03-01"` → enter replay mode
@@ -115,6 +122,20 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 4. `replay_trade` with `action: "buy"/"sell"/"close"` → execute trades
 5. `replay_status` → check position, P&L, current date
 6. `replay_stop` → return to realtime
+
+### "Manage tabs and multi-chart layout"
+
+Tabs (multiple chart windows):
+- `tab_list` → see all open tabs with index, ID, URL
+- `tab_switch` → switch to tab by index (from `tab_list`)
+- `tab_new` → open a new chart tab
+- `tab_close` → close the current tab
+
+Panes (split layout within one tab):
+- `pane_list` → list all panes with symbols; returns current layout code
+- `pane_set_layout` → change grid layout (`s`=single, `2h`, `2v`, `4`=2x2, `6`, `8`, etc.)
+- `pane_set_symbol` → set symbol on a specific pane by index
+- `pane_focus` → focus a specific pane by index (required before chart operations on that pane)
 
 ### "Screen multiple symbols"
 
@@ -155,16 +176,27 @@ Always use `rgba()` format for colors — hex with alpha (`#ff980055`) may fail.
 
 ### "Navigate the UI"
 
+High-level:
 - `ui_open_panel` → open/close pine-editor, strategy-tester, watchlist, alerts, trading
 - `ui_click` → click buttons by aria-label, text, or data-name
 - `layout_switch` → load a saved layout by name
 - `ui_fullscreen` → toggle fullscreen
 - `capture_screenshot` → take a screenshot (regions: "full", "chart", "strategy_tester")
+- `tv_ui_state` → get current UI state: which panels are open, all visible buttons with x,y positions
+
+Low-level (when `ui_click` isn't enough):
+- `ui_find_element` → find element by text/aria-label/CSS selector, returns position
+- `ui_mouse_click` → click at exact x,y coordinates (use `tv_ui_state` or `ui_find_element` to get coords)
+- `ui_hover` → hover over element by aria-label/data-name/text (triggers tooltips/dropdowns)
+- `ui_scroll` → scroll chart or page in any direction (pixels, default 300)
+- `ui_keyboard` → press keys or shortcuts (e.g., `key: "Escape"`, `key: "s"`, `modifiers: ["ctrl"]`)
+- `ui_type_text` → type text into the currently focused input
 
 ### "TradingView isn't running"
 
 - `tv_launch` → auto-detect and launch TradingView with CDP on Mac/Win/Linux
 - `tv_health_check` → verify connection is working
+- `tv_discover` → report available TradingView API paths and methods (diagnostics/dev)
 
 ## Context Management Rules
 
