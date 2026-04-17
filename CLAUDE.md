@@ -143,30 +143,11 @@ Panes (split layout within one tab):
 
 ### "Draw on the chart"
 
-- `draw_shape` → horizontal_line, trend_line, text (pass point + optional point2)
-  - ⚠️ `rectangle` shape returns `entity_id: null` — use `ui_evaluate` with `_createMultipointShape` + `setPoints` pattern instead (see CLAUDE_NOTES.md)
+- `draw_shape` → horizontal_line, trend_line, rectangle, text (pass point + optional point2)
+  - `rectangle` uses `_createMultipointShape` + `setPoints` internally (fixed 2026-04-16) — returns real `entity_id`
 - `draw_list` → see what's drawn
 - `draw_remove_one` → remove by ID
-- `draw_clear` → remove all drawings
-  - ⚠️ Uses `removeAllShapes()` internally — after calling this, `draw_shape` with rectangles stops working in the same session. Use `draw_remove_one` per shape instead, or `ui_evaluate` with `removeAllDrawingTools()`.
-
-**Drawing rectangles/zones — working pattern (via `ui_evaluate`):**
-```js
-(function() {
-  const api = window.TradingViewApi._activeChartWidgetWV.value();
-  api._createMultipointShape(
-    [{ time: T1, price: HIGH }, { time: T2, price: LOW }],
-    { shape: 'rectangle', overrides: { fillBackground: true, backgroundColor: 'rgba(255,152,0,0.33)', color: 'rgba(255,152,0,1)', linewidth: 2 }}
-  ).then(function(id) {
-    var s = api.getShapeById(id);
-    if (s) s.setPoints([{ time: T1, price: HIGH }, { time: T2, price: LOW }]);
-    window._done = true;
-  });
-  return 'drawing...';
-})()
-// Check window._done after ~5s
-```
-Always use `rgba()` format for colors — hex with alpha (`#ff980055`) may fail.
+- `draw_clear` → remove all drawings using `removeAllDrawingTools()` (safe — won't corrupt draw state)
 
 ### "Manage alerts"
 
@@ -185,6 +166,7 @@ High-level:
 - `tv_ui_state` → get current UI state: which panels are open, all visible buttons with x,y positions
 
 Low-level (when `ui_click` isn't enough):
+- `ui_evaluate` → run arbitrary JS in TradingView page context; use `await_promise: true` for async TV APIs (e.g., `_createMultipointShape`)
 - `ui_find_element` → find element by text/aria-label/CSS selector, returns position
 - `ui_mouse_click` → click at exact x,y coordinates (use `tv_ui_state` or `ui_find_element` to get coords)
 - `ui_hover` → hover over element by aria-label/data-name/text (triggers tooltips/dropdowns)

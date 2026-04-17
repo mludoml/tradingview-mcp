@@ -27,28 +27,30 @@ w funkcjach: `listDrawings`, `getProperties`, `removeOne`, `clearAll`.
 
 ---
 
-### 2. `draw_shape` (rectangle) — shapes niewidoczne, `entity_id: null`
+### 2. `draw_shape` (rectangle) — shapes niewidoczne, `entity_id: null` — ✅ NAPRAWIONE (2026-04-16)
 
-**Problem:** `draw_shape` z `shape: 'rectangle'` zwraca `{ success: true, entity_id: null }`.
-Prostokąty nie pojawiają się na wykresie.
+**Problem:** `draw_shape` z `shape: 'rectangle'` zwracał `{ success: true, entity_id: null }`.
+Prostokąty nie pojawiały się na wykresie.
 
 **Przyczyna:** `createMultipointShape` (bez podkreślnika) tworzy shape ale **bez punktów** (`getPoints()` zwraca null).
 Shape istnieje w `getAllShapes()` ale nie ma współrzędnych, więc nie renderuje.
 
-**Rozwiązanie:** Użyj `_createMultipointShape` (z podkreślnikiem) + wywołaj `setPoints()` po stworzeniu.
-Szczegóły poniżej.
+**Fix:** W `src/core/drawing.js` — gdy `shape === 'rectangle'`, `drawShape` teraz używa
+`_createMultipointShape` + `setPoints` przez `evaluateAsync` (CDP `awaitPromise: true`).
+Inne shape typy pozostają bez zmian.
 
 ---
 
-### 3. `removeAllShapes()` — niszczy stan API
+### 3. `removeAllShapes()` — niszczy stan API — ✅ NAPRAWIONE (2026-04-16)
 
 **Problem:** Po wywołaniu `api.removeAllShapes()`, żadne kolejne wywołania `_createMultipointShape`
 nie działają — zwracają Promise który nigdy nie dodaje shape do `getAllShapes()`.
 
-**Workaround:** Zamiast `removeAllShapes()`, usuwaj shapes indywidualnie przez `api.removeEntity(id)`.
-Albo używaj `removeAllDrawingTools()` z `_exposed_chartWidgetCollection`.
+**Fix:** `draw_clear` używa teraz `removeAllDrawingTools()` z `_exposed_chartWidgetCollection`
+(bezpieczne). Fallback: indywidualne `removeEntity()` per shape, jeśli `_exposed_chartWidgetCollection`
+niedostępny.
 
-**WAŻNE:** Nigdy nie wywoływać `removeAllShapes()` jeśli planujesz rysować nowe shapes w tej samej sesji!
+**WAŻNE:** Nigdy nie wywoływać `removeAllShapes()` bezpośrednio jeśli planujesz rysować nowe shapes!
 
 ---
 
@@ -99,22 +101,26 @@ createZone(api, ...).then(() => createZone(api, ...)).then(() => createZone(api,
 
 ---
 
-### 5. Kolory — format
+### 5. Kolory — format — ✅ AUTO-KONWERSJA DODANA (2026-04-16)
 
 **Działają:** `rgba(255, 152, 0, 0.33)`, `rgba(38, 166, 154, 1)`
 **Nie działają (czasem):** `#ff980055` (8-znakowy hex z alpha) — Promise odrzucony z błędem "Passed color string does not match any of the known color representations"
 
-**Rekomendacja:** Zawsze używaj formatu `rgba()` dla wszystkich kolorów w overrides.
+**Fix:** `draw_shape` automatycznie konwertuje wszystkie stringi w `overrides` z formatu `#RRGGBBAA`
+na `rgba()` przed przekazaniem do TV API. Nie musisz już pamiętać o formacie — konwersja jest automatyczna.
+
+**Rekomendacja:** Preferuj format `rgba()` wprost, ale `#RRGGBBAA` też zadziała.
 
 ---
 
-### 6. `evaluateAsync` nie jest wystawiony przez `ui_evaluate`
+### 6. `evaluateAsync` nie jest wystawiony przez `ui_evaluate` — ✅ NAPRAWIONE (2026-04-16)
 
-**Problem:** `ui_evaluate` MCP tool używa `evaluate()` z `awaitPromise: false`.
-Funkcja `evaluateAsync` istnieje w `connection.js` ale nie jest używana przez żaden tool.
+**Problem:** `ui_evaluate` MCP tool używał `evaluate()` z `awaitPromise: false`.
+Funkcja `evaluateAsync` istniała w `connection.js` ale nie była używana przez żaden tool.
 
-**Fix sugerowany:** Dodać nowy tool `ui_evaluate_async` który używa `evaluateAsync()`,
-lub dodać opcjonalny parametr `await_promise: boolean` do istniejącego `ui_evaluate`.
+**Fix:** `ui_evaluate` ma teraz opcjonalny parametr `await_promise: boolean`.
+Gdy `await_promise: true`, CDP czeka na rozwiązanie Promise przed zwróceniem wyniku.
+Użyj tego dla `_createMultipointShape` i innych async TV APIs.
 
 ---
 
@@ -177,10 +183,10 @@ Kompletny działający przykład (wklejić do `ui_evaluate`):
 | Priorytet | Problem | Fix |
 |-----------|---------|-----|
 | ✅ DONE | `draw_list` / `draw_get_properties` / `draw_remove_one` / `draw_clear` broken | Naprawiono bug importu w `src/core/drawing.js` (2026-04-15) |
-| HIGH | `draw_shape` nie działa | Przepisać na `_createMultipointShape` + `setPoints` pattern |
-| HIGH | `removeAllShapes()` niszczy stan | Zastąpić `removeEntity()` per shape lub `removeAllDrawingTools()` |
-| MED | `ui_evaluate` nie awaits Promises | Dodać `ui_evaluate_async` tool lub parametr `await_promise` |
-| MED | Kolory hex z alpha | Walidacja i auto-konwersja do `rgba()` przed przekazaniem do API |
+| ✅ DONE | `draw_shape` rectangle niewidoczny | Przepisano na `_createMultipointShape` + `setPoints` przez `evaluateAsync` (2026-04-16) |
+| ✅ DONE | `removeAllShapes()` niszczy stan | `draw_clear` używa teraz `removeAllDrawingTools()`, fallback: `removeEntity()` per shape (2026-04-16) |
+| ✅ DONE | `ui_evaluate` nie awaits Promises | Dodano parametr `await_promise: boolean` do `ui_evaluate` (2026-04-16) |
+| ✅ DONE | Kolory hex z alpha | Auto-konwersja `#RRGGBBAA` → `rgba()` w `drawShape` (2026-04-16) |
 | LOW | Czas tworzenia shape (~3–5s) | Zbadać czy da się przyspieszyć (może inny endpoint TV) |
 
 ---

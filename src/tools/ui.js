@@ -87,8 +87,9 @@ export function registerUiTools(server) {
 
   server.tool('ui_evaluate', 'Execute JavaScript code in the TradingView page context for advanced automation', {
     expression: z.string().describe('JavaScript expression to evaluate in the page context. Wrap in IIFE for complex logic.'),
-  }, async ({ expression }) => {
-    try { return jsonResult(await core.uiEvaluate({ expression })); }
+    await_promise: z.boolean().optional().describe('If true, await the returned Promise before returning (needed for _createMultipointShape and other async TV APIs). Default: false.'),
+  }, async ({ expression, await_promise }) => {
+    try { return jsonResult(await core.uiEvaluate({ expression, await_promise })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 }

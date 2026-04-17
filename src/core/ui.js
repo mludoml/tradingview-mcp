@@ -287,7 +287,7 @@ export async function findElement({ query, strategy }) {
   return { success: true, query, strategy: strat, count: results?.length || 0, elements: results || [] };
 }
 
-export async function uiEvaluate({ expression }) {
-  const result = await evaluate(expression);
+export async function uiEvaluate({ expression, await_promise }) {
+  const result = await_promise ? await evaluateAsync(expression) : await evaluate(expression);
   return { success: true, result };
 }
