@@ -2,6 +2,7 @@ import CDP from 'chrome-remote-interface';
 
 let client = null;
 let targetInfo = null;
+let activeTargetId = null;
 const CDP_HOST = process.env.CDP_HOST || 'localhost';
 const CDP_PORT = parseInt(process.env.CDP_PORT || '9222', 10);
 const MAX_RETRIES = 5;
@@ -90,6 +91,13 @@ export async function connect() {
 async function findChartTarget() {
   const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/list`);
   const targets = await resp.json();
+  // If a specific tab was activated via tab_switch, use it
+  if (activeTargetId) {
+    const pinned = targets.find(t => t.id === activeTargetId);
+    if (pinned) return pinned;
+    // Target gone (closed) — clear pin and fall through to auto-detect
+    activeTargetId = null;
+  }
   // Prefer targets with tradingview.com/chart in the URL
   return targets.find(t => t.type === 'page' && /tradingview\.com\/chart/i.test(t.url))
     || targets.find(t => t.type === 'page' && /tradingview/i.test(t.url))
@@ -127,6 +135,19 @@ export async function evaluateAsync(expression) {
 export async function disconnect() {
   if (client) {
     try { await client.close(); } catch {}
+    client = null;
+    targetInfo = null;
+  }
+}
+
+/**
+ * Set a specific CDP target as active. Forces reconnect on next getClient() call.
+ * Used by tab_switch to redirect all subsequent tool calls to the correct tab.
+ */
+export function setActiveTarget(id) {
+  activeTargetId = id;
+  if (client) {
+    try { client.close(); } catch {}
     client = null;
     targetInfo = null;
   }

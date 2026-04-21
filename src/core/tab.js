@@ -2,10 +2,10 @@
  * Core tab management logic.
  * Controls TradingView Desktop tabs via CDP and Electron keyboard shortcuts.
  */
-import { getClient, evaluate } from '../connection.js';
+import { getClient, setActiveTarget } from '../connection.js';
 
-const CDP_HOST = 'localhost';
-const CDP_PORT = 9222;
+const CDP_HOST = process.env.CDP_HOST || 'localhost';
+const CDP_PORT = parseInt(process.env.CDP_PORT || '9222', 10);
 
 /**
  * List all open chart tabs (CDP page targets).
@@ -83,7 +83,9 @@ export async function closeTab() {
 }
 
 /**
- * Switch to a tab by index. Reconnects CDP to the new target.
+ * Switch to a tab by index.
+ * Activates the tab visually (CDP /json/activate) AND redirects all subsequent
+ * MCP tool calls to that tab by pinning its target ID in connection.js.
  */
 export async function switchTab({ index }) {
   const tabs = await list();
@@ -95,12 +97,21 @@ export async function switchTab({ index }) {
 
   const target = tabs.tabs[idx];
 
-  // Use CDP Target.activateTarget to bring the tab to front
-  try {
-    const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/activate/${target.id}`);
-    const text = await resp.text();
-    return { success: true, action: 'switched', index: idx, tab_id: target.id, chart_id: target.chart_id };
-  } catch (e) {
-    throw new Error(`Failed to activate tab ${idx}: ${e.message}`);
+  // Bring tab to front in TradingView UI
+  const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/activate/${target.id}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to activate tab ${idx}: HTTP ${resp.status}`);
   }
+
+  // Pin this target — next getClient() will connect to it instead of tab[0]
+  setActiveTarget(target.id);
+
+  return {
+    success: true,
+    action: 'switched',
+    index: idx,
+    tab_id: target.id,
+    chart_id: target.chart_id,
+    title: target.title,
+  };
 }
