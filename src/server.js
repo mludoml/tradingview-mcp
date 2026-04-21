@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { disconnect } from './connection.js';
 import { registerHealthTools } from './tools/health.js';
 import { registerChartTools } from './tools/chart.js';
 import { registerPineTools } from './tools/pine.js';
@@ -88,6 +89,21 @@ registerTabTools(server);
 // Startup notice (stderr so it doesn't interfere with MCP stdio protocol)
 process.stderr.write('⚠  tradingview-mcp  |  Unofficial tool. Not affiliated with TradingView Inc. or Anthropic.\n');
 process.stderr.write('   Ensure your usage complies with TradingView\'s Terms of Use.\n\n');
+
+// Graceful shutdown: close CDP before process exits so TradingView doesn't crash
+// with "write EIO" when the socket is abruptly broken.
+// Triggered by: SIGTERM (subprocess kill), SIGINT (Ctrl+C), or stdin EOF
+// (Python asyncio stdio_client closes stdin when the context manager exits).
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try { await disconnect(); } catch {}
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+process.stdin.on('end', shutdown);  // Python closed stdin → we're being torn down
 
 // Start stdio transport
 const transport = new StdioServerTransport();

@@ -73,10 +73,11 @@ export async function connect() {
       targetInfo = target;
       client = await CDP({ host: CDP_HOST, port: CDP_PORT, target: target.id });
 
-      // Enable required domains
-      await client.Runtime.enable();
-      await client.Page.enable();
-      await client.DOM.enable();
+      // NOTE: Do NOT enable ANY domains (Runtime/Page/DOM).
+      // Enabling domains causes TradingView to subscribe to CDP events and forward
+      // them through the socket. When the MCP process exits (SIGTERM/SIGKILL), the
+      // socket closes abruptly → TradingView crashes with "write EIO".
+      // CDP command calls (evaluate, captureScreenshot) work without domain enable.
 
       return client;
     } catch (err) {
@@ -146,11 +147,12 @@ export async function disconnect() {
  */
 export function setActiveTarget(id) {
   activeTargetId = id;
-  if (client) {
-    try { client.close(); } catch {}
-    client = null;
-    targetInfo = null;
-  }
+  // NOTE: Do NOT call client.close() here. Explicit close() causes TradingView to
+  // accumulate "closed" event listeners on BrowserWindow (one per reconnect),
+  // triggering MaxListenersExceededWarning and eventual "write EIO" crash.
+  // The old TCP connection will be naturally terminated when GC'd.
+  client = null;
+  targetInfo = null;
 }
 
 // --- Direct API path helpers ---
